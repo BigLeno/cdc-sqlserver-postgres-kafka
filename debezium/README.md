@@ -14,7 +14,6 @@ debezium/
 ├── docker-compose.yml
 ├── source-connector.json
 ├── sink-connector.json
-├── setup-connectors.sh
 └── .env.example
 ```
 
@@ -200,9 +199,9 @@ PostgreSQL.
 ### Prerequisite
 
 Every table in the target PostgreSQL schema **must have a PRIMARY KEY
-defined** before registering the Sink. See [`../scripts/`](../scripts/)
-for the automated helper that introspects the source tables and creates
-matching PKs [1].
+defined** before registering the Sink. Use your preferred tool
+(`psql`, pgAdmin, dbeaver, or a migration script) to add PKs that
+match the source table primary keys.
 
 ### `sink-connector.json`
 
@@ -218,8 +217,8 @@ matching PKs [1].
     "insert.mode": "upsert",
     "delete.enabled": "true",
     "schema.evolution": "none",
-    "topics.regex": "${TOPIC_PREFIX}\\.${SQLSERVER_DATABASE}\\.dbo\\.${TOPICS_REGEX_PATTERN}",
-    "table.name.format": "${POSTGRES_TARGET_SCHEMA}.${topic}",
+    "topics.regex": "${TOPIC_PREFIX}\\.${SQLSERVER_DATABASE}\\.dbo\\.(tb[A-Z]|TB|VADU).*",
+    "table.name.format": "bronze.${topic}",
     "primary.key.mode": "record_key",
     "quote.identifiers": "false",
     "transforms": "route",
@@ -241,53 +240,51 @@ curl -s -X POST http://localhost:8083/connectors \
 ## Connector management
 
 ```bash
-# Status of the Source connector
-curl -s http://localhost:8083/connectors/${SOURCE_CONNECTOR_NAME}/status | python3 -m json.tool
+# Status of Source
+curl -s "${KAFKA_CONNECT_URL}/connectors/${SOURCE_CONNECTOR_NAME}/status" \
+  | python3 -m json.tool
 
-# Status of the Sink connector
-curl -s http://localhost:8083/connectors/${SINK_CONNECTOR_NAME}/status | python3 -m json.tool
+# Status of Sink
+curl -s "${KAFKA_CONNECT_URL}/connectors/${SINK_CONNECTOR_NAME}/status" \
+  | python3 -m json.tool
 
 # List all connectors
-curl -s http://localhost:8083/connectors | python3 -m json.tool
+curl -s "${KAFKA_CONNECT_URL}/connectors" | python3 -m json.tool
 
-# Pause the Source
-curl -s -X PUT http://localhost:8083/connectors/${SOURCE_CONNECTOR_NAME}/pause
+# Pause Source
+curl -s -X PUT "${KAFKA_CONNECT_URL}/connectors/${SOURCE_CONNECTOR_NAME}/pause"
 
-# Resume the Source
-curl -s -X PUT http://localhost:8083/connectors/${SOURCE_CONNECTOR_NAME}/resume
+# Resume Source
+curl -s -X PUT "${KAFKA_CONNECT_URL}/connectors/${SOURCE_CONNECTOR_NAME}/resume"
 
-# Restart a Sink task
-curl -s -X POST http://localhost:8083/connectors/${SINK_CONNECTOR_NAME}/tasks/0/restart
+# Restart Sink task
+curl -s -X POST "${KAFKA_CONNECT_URL}/connectors/${SINK_CONNECTOR_NAME}/tasks/0/restart"
 
 # Delete a connector
-curl -s -X DELETE http://localhost:8083/connectors/${SINK_CONNECTOR_NAME}
+curl -s -X DELETE "${KAFKA_CONNECT_URL}/connectors/${SINK_CONNECTOR_NAME}"
 
 # List available plugins
-curl -s http://localhost:8083/connector-plugins | python3 -m json.tool
+curl -s "${KAFKA_CONNECT_URL}/connector-plugins" | python3 -m json.tool
 ```
-
-> Replace `${SOURCE_CONNECTOR_NAME}` and `${SINK_CONNECTOR_NAME}` with
-> the actual values from your `.env` (defaults:
-> `source-sqlserver-connector` and `sink-postgres-connector`).
 
 ## SQL Server requirements
 
-For CDC to work, the DBA must ensure: [1]
+For CDC to work, the DBA must ensure:
 
-1. CDC enabled at the database level:
+1. **CDC enabled on the database:**
    ```sql
    EXEC sys.sp_cdc_enable_db
    ```
 
-2. CDC enabled on every table to be replicated:
+2. **CDC enabled on each table to be replicated:**
    ```sql
    EXEC sys.sp_cdc_enable_table
        @source_schema = 'dbo',
-       @source_name   = 'tbCustomers',
+       @source_name   = 'tbEXAMPLE',
        @role_name     = NULL
    ```
 
-3. **SQL Server Agent running** — required for CDC to scan the
+3. **SQL Server Agent running** — required by CDC to scan the
    transaction log [1]:
    ```sql
    SELECT program_name, status
@@ -297,12 +294,9 @@ For CDC to work, the DBA must ensure: [1]
 
 ## Troubleshooting
 
-| Error | Cause | Solution |
+| Error | Cause | Action |
 |---|---|---|
-| `no unique or exclusion constraint` | PK missing in PostgreSQL | Run `add_primary_keys.py` from `../scripts/` [1] |
-| `Unable to get last available log position` | CDC disabled in SQL Server | DBA re-enables CDC at the database level [1] |
-| `db history topic is missing` | Schema history topic was lost | Recreate connector with `snapshot.mode: recovery` [1] |
-| `terminating connection due to administrator command` | PostgreSQL was restarted | Restart the Sink task [1] |
-
-For the full troubleshooting playbook, see
-[`../runbook/README.md`](../runbook/README.md).
+| `no unique or exclusion constraint` | PK does not exist in PostgreSQL | Add PK to the target table (see prerequisite) |
+| `Unable to get last available log position` | CDC disabled on SQL Server | DBA re-enables CDC on the database |
+| `db history topic is missing` | Schema history topic lost | Recreate connector with `snapshot.mode: recovery` |
+| `terminating connection due to administrator command` | PostgreSQL restarted | Restart Sink task |
