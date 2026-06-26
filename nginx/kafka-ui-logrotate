@@ -1,0 +1,11 @@
+/var/log/nginx/kafka-ui-access.log {
+    daily
+    rotate 3
+    compress
+    missingok
+    notifempty
+    sharedscripts
+    postrotate
+        nginx -s reopen
+    endscript
+}
