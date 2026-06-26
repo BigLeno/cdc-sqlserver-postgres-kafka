@@ -1,0 +1,17 @@
+{
+  "name": "source-sqlserver-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.sqlserver.SqlServerConnector",
+    "database.hostname": "${SQLSERVER_HOST}",
+    "database.port": "${SQLSERVER_PORT}",
+    "database.user": "${SQLSERVER_USER}",
+    "database.password": "${SQLSERVER_PASSWORD}",
+    "database.names": "${SQLSERVER_DATABASE}",
+    "database.encrypt": "false",
+    "topic.prefix": "${TOPIC_PREFIX}",
+    "table.include.list": "${TABLE_INCLUDE_LIST}",
+    "snapshot.mode": "recovery",
+    "schema.history.internal.kafka.bootstrap.servers": "${KAFKA_BOOTSTRAP_SERVERS}",
+    "schema.history.internal.kafka.topic": "${TOPIC_PREFIX}.schema-changes"
+  }
+}
