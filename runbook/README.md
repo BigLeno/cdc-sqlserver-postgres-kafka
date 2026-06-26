@@ -100,13 +100,17 @@ bash reset-connector.sh source
 **Cause:** Tables in the target PostgreSQL schema do not have a
 PRIMARY KEY defined [1].
 
-**Solution:**
-```bash
-# Run the PK creation script
-python3 scripts/add_primary_keys.py
+**Solution:** Add the missing PKs using your preferred tool:
+
+```sql
+-- Example: add a PK to a table missing one
+ALTER TABLE bronze.tbexample
+ADD CONSTRAINT pk_tbexample PRIMARY KEY (id);
 ```
 
-Then recreate the Sink connector:
+Apply the change to every replicated table, then recreate the Sink
+connector:
+
 ```bash
 bash reset-connector.sh sink
 ```
@@ -253,17 +257,34 @@ WHERE id = 1
 Use only if the target schema is corrupted or severely out of date.
 **Destroys all data in the target schema and rebuilds from scratch.**
 
+Before CDC starts, the target schema must contain a full historical
+snapshot of every table you plan to replicate. The mechanism is up
+to you — common choices include:
+
+- `pg_dump` / `pg_restore` from the SQL Server via foreign data wrapper
+- AWS Database Migration Service or Azure DMS
+- A one-off Python migration script using `pyodbc` + `psycopg2`
+
+Whichever option you pick, ensure every target table has a **PRIMARY
+KEY defined**, since the Sink connector relies on `ON CONFLICT (pk) DO
+UPDATE`.
+
+Procedure:
+1. Pause the Sink to avoid conflicts during the load
+2. Load historical data into the target schema
+3. Verify PRIMARY KEYs on every replicated table
+4. Resume the Sink
+
 ```bash
-# 1. Pause the Sink to avoid conflicts during the load
+# 1. Pause the Sink
 curl -s -X PUT \
   "${KAFKA_CONNECT_URL}/connectors/${SINK_CONNECTOR_NAME}/pause"
 
-# 2. Run the scripts in order
-python3 scripts/migrate_data.py
-python3 scripts/rename_to_lowercase.py
-python3 scripts/add_primary_keys.py
+# 2. Load historical data using your preferred tool
 
-# 3. Resume the Sink
+# 3. Verify PKs on every replicated table
+
+# 4. Resume the Sink
 curl -s -X PUT \
   "${KAFKA_CONNECT_URL}/connectors/${SINK_CONNECTOR_NAME}/resume"
 ```
@@ -298,7 +319,7 @@ watch -n 30 df -h /
 |---|---|---|
 | Source FAILED, invalid LSN | CDC re-enabled on SQL Server | `reset-connector.sh source` |
 | Source FAILED, `cdc.change_tables` | CDC disabled on database | DBA re-enables CDC |
-| Sink FAILED, ON CONFLICT | PKs missing in target schema | Run `add_primary_keys.py` |
+| Sink FAILED, ON CONFLICT | PKs missing in target schema | Add PKs to target tables |
 | Sink FAILED, terminating connection | PostgreSQL restarted | Restart Sink task |
 | Debezium fails to start | Replication factor > brokers | Fix `docker-compose.yml` |
 | Kafka does not start | Service not enabled | `systemctl enable kafka` |
