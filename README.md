@@ -23,6 +23,55 @@ flowchart LR
     C -.->|"Observability"| F
 ```
 
+## How it works
+
+The same pipeline handles all three write operations. Each one
+flows through Kafka as a CDC event with a different `op` code:
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant SQL as SQL Server
+    participant DZ as Debezium Source
+    participant K as Kafka
+    participant SK as Debezium Sink
+    participant PG as PostgreSQL
+
+    Note over App,PG: INSERT — op=c
+
+    App->>SQL: INSERT INTO tbUser (id=1, name='X')
+    SQL->>SQL: Writes to transaction log
+    DZ->>SQL: Reads current LSN
+    SQL-->>DZ: CDC event (op=c, after={...})
+    DZ->>K: Publishes to <prefix>.<schema>.dbo.tbUser
+    K-->>SK: Consumes event
+    SK->>PG: INSERT INTO bronze.tbuser (id, name) VALUES (1, 'X')
+
+    Note over App,PG: UPDATE — op=u
+
+    App->>SQL: UPDATE tbUser SET name='Y' WHERE id=1
+    SQL->>SQL: Writes to transaction log
+    DZ->>SQL: Reads current LSN
+    SQL-->>DZ: CDC event (op=u, before={...}, after={...})
+    DZ->>K: Publishes to <prefix>.<schema>.dbo.tbUser
+    K-->>SK: Consumes event
+    SK->>PG: INSERT ... ON CONFLICT DO UPDATE SET name='Y' WHERE id=1
+
+    Note over App,PG: DELETE — op=d
+
+    App->>SQL: DELETE FROM tbUser WHERE id=1
+    SQL->>SQL: Writes to transaction log
+    DZ->>SQL: Reads current LSN
+    SQL-->>DZ: CDC event (op=d, before={...})
+    DZ->>K: Publishes to <prefix>.<schema>.dbo.tbUser
+    K-->>SK: Consumes event
+    SK->>PG: DELETE FROM bronze.tbuser WHERE id=1
+```
+
+The `flowchart` above shows the architecture; this diagram shows the
+chronological order of operations for **INSERT, UPDATE, and DELETE**
+through the same pipeline.
+
 ## Stack
 
 | Component       | Version | Role                              |
