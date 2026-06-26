@@ -54,7 +54,6 @@ cdc-sqlserver-postgres-kafka/
 ├── debezium/                 # Source & Sink connectors + Docker Compose
 ├── kafka-ui/                 # Kafka UI setup
 ├── nginx/                    # Reverse proxy configuration
-├── scripts/                  # Historical load and PK creation scripts
 └── runbook/                  # Operational guide & troubleshooting
 ```
 
@@ -73,8 +72,8 @@ Before deploying this pipeline you need:
 ### PostgreSQL
 - A target database and schema already created.
 - Tables mirroring the source schema with **`PRIMARY KEY`** defined
-  on each one. See `scripts/add_primary_keys.py` for an automated
-  helper.
+  on each one. Use your preferred migration tool to create the
+  schema and the PKs before starting the Sink connector.
 
 ### Linux host (Ubuntu 22.04+)
 - Docker + Docker Compose v2
@@ -108,7 +107,6 @@ each subdirectory.
 | Debezium Source & Sink connectors    | [`debezium/README.md`](./debezium/)  |
 | Kafka UI setup                       | [`kafka-ui/README.md`](./kafka-ui/)  |
 | Nginx reverse proxy & logs           | [`nginx/README.md`](./nginx/)        |
-| Historical load scripts             | [`scripts/README.md`](./scripts/)    |
 | Troubleshooting & runbook            | [`runbook/README.md`](./runbook/)    |
 
 ## References
