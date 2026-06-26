@@ -217,7 +217,7 @@ match the source table primary keys.
     "insert.mode": "upsert",
     "delete.enabled": "true",
     "schema.evolution": "none",
-    "topics.regex": "${TOPIC_PREFIX}\\.${SQLSERVER_DATABASE}\\.dbo\\.(tb[A-Z]|TB|VADU).*",
+    "topics.regex": "${TOPIC_PREFIX}\\.${SQLSERVER_DATABASE}\\.dbo\\.(tb[A-Z]|TB).*",
     "table.name.format": "bronze.${topic}",
     "primary.key.mode": "record_key",
     "quote.identifiers": "false",
